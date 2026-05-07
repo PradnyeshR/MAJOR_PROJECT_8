@@ -4,6 +4,7 @@ Supports PostgreSQL (production) and SQLite (development fallback).
 """
 
 import os
+import ssl as ssl_module
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
@@ -15,12 +16,30 @@ DATABASE_URL = os.getenv(
     "sqlite+aiosqlite:///./onboarding.db"
 )
 
+# ── Prepare engine kwargs (handle asyncpg + SSL for cloud Postgres) ──────────
+engine_kwargs = {
+    "future": True,
+}
+
+if "postgresql" in DATABASE_URL or "postgres" in DATABASE_URL:
+    # Some providers give postgres:// — SQLAlchemy needs postgresql://
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
+
+    # asyncpg does NOT understand ?sslmode=require in the URL.
+    # Strip it and pass ssl via connect_args instead.
+    if "?" in DATABASE_URL:
+        DATABASE_URL = DATABASE_URL.split("?")[0]
+
+    ssl_ctx = ssl_module.create_default_context()
+    ssl_ctx.check_hostname = False
+    ssl_ctx.verify_mode = ssl_module.CERT_NONE
+    engine_kwargs["connect_args"] = {"ssl": ssl_ctx}
+else:
+    # SQLite — enable SQL logging for local dev
+    engine_kwargs["echo"] = True
+
 # Create async engine
-engine = create_async_engine(
-    DATABASE_URL,
-    echo=True,  # SQL logging — disable in production
-    future=True,
-)
+engine = create_async_engine(DATABASE_URL, **engine_kwargs)
 
 # Session factory
 async_session = async_sessionmaker(
