@@ -14,7 +14,7 @@ load_dotenv()
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "sqlite+aiosqlite:///./onboarding.db"
-)
+).strip()
 
 # ── Prepare engine kwargs (handle asyncpg + SSL for cloud Postgres) ──────────
 engine_kwargs = {
